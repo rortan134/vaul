@@ -98,7 +98,7 @@ export function useSnapPoints({
 
       setActiveSnapPoint(newSnapPointIndex !== null ? snapPoints?.[newSnapPointIndex] : null);
     },
-    [drawerRef.current, snapPoints, snapPointsOffset, fadeFromIndex, overlayRef, setActiveSnapPoint],
+    [drawerRef, fadeFromIndex, onSnapPointChange, overlayRef, setActiveSnapPoint, snapPoints, snapPointsOffset],
   );
 
   React.useEffect(() => {
@@ -123,16 +123,14 @@ export function useSnapPoints({
   }) {
     if (fadeFromIndex === undefined) return;
 
-    const currentPosition = activeSnapPointOffset - draggedDistance;
     const isOverlaySnapPoint = activeSnapPointIndex === fadeFromIndex - 1;
-    const isFirst = activeSnapPointIndex === 0;
-    const hasDraggedUp = draggedDistance > 0;
-
     if (isOverlaySnapPoint) {
       set(overlayRef.current, {
         transition: `opacity ${TRANSITIONS.DURATION}s cubic-bezier(${TRANSITIONS.EASE.join(',')})`,
       });
     }
+
+    const hasDraggedUp = draggedDistance > 0;
 
     if (velocity > 2 && !hasDraggedUp) {
       if (dismissible) closeDrawer();
@@ -145,23 +143,17 @@ export function useSnapPoints({
       return;
     }
 
-    // Find the closest snap point to the current position
-    const closestSnapPoint = snapPointsOffset?.reduce((prev, curr) => {
-      if (typeof prev !== 'number' || typeof curr !== 'number') return prev;
-
-      return Math.abs(curr - currentPosition) < Math.abs(prev - currentPosition) ? curr : prev;
-    });
-
     if (velocity > VELOCITY_THRESHOLD && Math.abs(draggedDistance) < window.innerHeight * 0.4) {
       const dragDirection = hasDraggedUp ? 1 : -1; // 1 = up, -1 = down
 
       // Don't do anything if we swipe upwards while being on the last snap point
-      if (dragDirection > 0 && isLastSnapPoint) {
+      if (dragDirection > 0 && isLastSnapPoint && snapPoints) {
         snapToPoint(snapPointsOffset[snapPoints.length - 1]);
         return;
       }
 
-      if (isFirst && dragDirection < 0 && dismissible) {
+      const isFirstSnapPoint = activeSnapPointIndex === 0;
+      if (isFirstSnapPoint && dragDirection < 0 && dismissible) {
         closeDrawer();
       }
 
@@ -171,17 +163,28 @@ export function useSnapPoints({
       return;
     }
 
+    const currentPosition = activeSnapPointOffset - draggedDistance;
+    // Find the closest snap point to the current position
+    const closestSnapPoint = snapPointsOffset?.reduce((prev, curr) => {
+      if (typeof prev !== 'number' || typeof curr !== 'number') return prev;
+
+      return Math.abs(curr - currentPosition) < Math.abs(prev - currentPosition) ? curr : prev;
+    });
+
     snapToPoint(closestSnapPoint);
   }
 
-  function onDrag({ draggedDistance }: { draggedDistance: number }) {
-    if (activeSnapPointOffset === null) return;
-    const newYValue = activeSnapPointOffset - draggedDistance;
+  const onDrag = React.useCallback(
+    ({ draggedDistance }: { draggedDistance: number }) => {
+      if (activeSnapPointOffset === null) return;
+      const newYValue = activeSnapPointOffset - draggedDistance;
 
-    set(drawerRef.current, {
-      transform: `translate3d(0, ${newYValue}px, 0)`,
-    });
-  }
+      set(drawerRef.current, {
+        transform: `translate3d(0, ${newYValue}px, 0)`,
+      });
+    },
+    [activeSnapPointOffset, drawerRef],
+  );
 
   function getPercentageDragged(absDraggedDistance: number, isDraggingDown: boolean) {
     if (!snapPoints || typeof activeSnapPointIndex !== 'number' || !snapPointsOffset || fadeFromIndex === undefined)
